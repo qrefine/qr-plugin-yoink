@@ -7,6 +7,7 @@ try:
   from jpype import getDefaultJVMPath
   from jpype import java
   from jpype import startJVM
+  import jpype	
 except ImportError, e:
   print str(e)
   pass
@@ -15,7 +16,8 @@ except ImportError, e:
 class PYoink(object):
 
   def __init__(self, yoink_jar_path, input_file=None,out_file=None,system=None):
-    startJVM(getDefaultJVMPath(), "-Djava.class.path="+yoink_jar_path)
+    if not jpype.isJVMStarted():
+      startJVM(getDefaultJVMPath(), "-Djava.class.path="+yoink_jar_path)	
     Yoink=JClass("org.wallerlab.yoink.Yoink")
     yoink=Yoink()
     JavaApplicationContext=JClass("org.springframework.context.annotation.AnnotationConfigApplicationContext")
