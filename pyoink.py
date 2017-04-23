@@ -1,4 +1,4 @@
-from libtbx.utils import Sorry
+from libtbx.utils import Sorry                                                                                                                                                                                                                                                                                                                                                                                                    
 import numpy as np
 try:
   from jpype import shutdownJVM
@@ -7,7 +7,7 @@ try:
   from jpype import getDefaultJVMPath
   from jpype import java
   from jpype import startJVM
-  import jpype	
+  import jpype  
 except ImportError, e:
   print str(e)
   pass
@@ -15,15 +15,18 @@ except ImportError, e:
 
 class PYoink(object):
 
-  def __init__(self, yoink_jar_path, input_file=None,out_file=None,system=None):
+  def __init__(self, yoink_jar_path, yoink_dat_path=None, input_file=None,out_file=None,system=None):
     if not jpype.isJVMStarted():
-      startJVM(getDefaultJVMPath(), "-Djava.class.path="+yoink_jar_path)	
+      startJVM(getDefaultJVMPath(), "-Djava.class.path="+yoink_jar_path)        
     Yoink=JClass("org.wallerlab.yoink.Yoink")
+    self.yoink_dat_path = yoink_dat_path
     yoink=Yoink()
-    JavaApplicationContext=JClass("org.springframework.context.annotation.AnnotationConfigApplicationContext")
+    JavaApplicationContext=JClass(
+      "org.springframework.context.annotation.AnnotationConfigApplicationContext")
     javaApplicationContext=JavaApplicationContext()
     yoink.getBeans(javaApplicationContext)
-    FileAdaptiveQMMMProcessor=JClass("org.wallerlab.yoink.service.processor.FileAdaptiveQMMMProcessor")
+    FileAdaptiveQMMMProcessor=JClass(
+      "org.wallerlab.yoink.service.processor.FileAdaptiveQMMMProcessor")
     self.adaptiveQMMM=javaApplicationContext.getBean(FileAdaptiveQMMMProcessor)
     JaxbFileReader=JClass("org.wallerlab.yoink.molecular.data.JaxbFileReader")
     self.jaxbFileReader=javaApplicationContext.getBean(JaxbFileReader)
@@ -35,7 +38,7 @@ class PYoink(object):
     self.out_file=out_file
     self.system=system
     self.set_up()
-	
+        
   def set_up(self):
     if(self.input_file is not None):
       self.jaxb_cml=self.jaxbFileReader.read(JString(self.input_file), self.Cml())
@@ -44,20 +47,19 @@ class PYoink(object):
   def shutdown(self):
     shutdownJVM()
 
-  def get_interaction_list(self):
+  def get_interactions_list(self):
     result=self.adaptiveQMMM.process(self.input_file)
-    interaction_temp= result.getInteractionList()
-    interaction_list=[]
-    weight_temp=result.getInteractionWeight()
-    weight=[]
-    for i in  range (interaction_temp.size()):
-      temp=interaction_temp.get(i)
+    interactions_temp= result.getInteractionList()
+    interactions_list=[]
+    weights_temp=result.getInteractionWeight()
+    weights=[]
+    for i in  range (interactions_temp.size()):
+      temp=interactions_temp.get(i)
       plist=[temp.get(0).intValue(),temp.get(1).intValue()]
-      interaction_list.append(plist)
-      temp=weight_temp.get(i).doubleValue()
-      weight.append(temp)
-    return interaction_list,weight
-
+      interactions_list.append(plist)
+      temp=weights_temp.get(i).doubleValue()
+      weights.append(temp)
+    return interactions_list,weights
 
   def get_qm_indices(self):
     self.result=self.adaptiveQMMM.process(self.input_file)
@@ -70,7 +72,8 @@ class PYoink(object):
       atom=qm_atoms.get(i)
       qm_atom_indices.append(atom.getIndex())
     qm_atom_indices=np.sort(qm_atom_indices)
-    qm_molecules_temp=self.result.getRegions().get(RegionName.valueOf("QM")).getMolecules()
+    qm_molecules_temp=self.result.getRegions().get(
+      RegionName.valueOf("QM")).getMolecules()
     qm_molecules=java.util.ArrayList()
     qm_molecules.addAll(qm_molecules_temp)
     qm_molecule_indices=[]
@@ -85,7 +88,8 @@ class PYoink(object):
     if(self.out_file==None):
       self.out_file=self.input_file
     print "self.out_file",self.out_file
-    self.jaxbFileWriter.write(JString(self.out_file),self.result.getInput().getValue())
+    self.jaxbFileWriter.write(JString(self.out_file), \
+                              self.result.getInput().getValue())
 
   def update_input_file(self, positions=None,qm_core_fixed=None):
     Double=JClass("java.lang.Double")
@@ -144,3 +148,54 @@ class PYoink(object):
     elif(qm_core_fixed ==None and positions!=None):
       self.update_input_file(positions)
     self.set_up()
+
+  def write_clustering_qmmm_xmls(self, clustering_file_name, positions, qmmm_file_name, symbols):
+    yoink_dat_path = self.yoink_dat_path
+    cluster_file = open(clustering_file_name, "w+")
+    cluster_file.write(
+      """<?xml version="1.0" encoding="UTF-8" standalone="yes"?> \n """)
+    cluster_file.write("""<cml xmlns="http://www.xml-cml.org/schema"> \n """)
+    cluster_file.write("<moleculeList> \n")
+    for resid in range(len(positions)):
+      cluster_file.write("""<molecule id="MM"> \n""")
+      cluster_file.write("<atomArray> \n")
+      for j in range(len(positions[resid])):
+        atom = "<atom id=\"" + str(j) + "\" " + " elementType=\"" \
+          + symbols[resid][j] + "\" " + " x3=\"" + str(positions[resid][j][0]) \
+          + "\"  " + "y3=\"" + str(positions[resid][j][1]) + "\"" + " z3=\"" \
+          + str(positions[resid][j][2]) + "\"" + "></atom> \n"
+        cluster_file.write(atom)
+      cluster_file.write("</atomArray> \n")
+      cluster_file.write("</molecule> \n")
+    cluster_file.write("</moleculeList> \n")
+    cluster_file.write("""<parameterList title="parameters"> \n""")
+    cluster_file.write(""" <parameter name="DENSITY_BUFFER" value="1"/> \n""")
+    cluster_file.write("""  <parameter name="DENSITY_QM" value="0.001"/> \n""")
+    cluster_file.write("""  <parameter name="DENSITY_ASR_QM" value="0.000000001"/>\n""")
+    cluster_file.write("""  <parameter name="DENSITY_ASR_QMCORE" value="0.1"/>  \n """)
+    cluster_file.write("""  <parameter name="DENSITY_DORI" value="0.001"/>  \n """)
+    cluster_file.write("""  <parameter name="DENSITY_SEDD" value="0.1"/>   \n""")
+    cluster_file.write("""  <parameter name="SEDD" value="5"/> \n """)
+    cluster_file.write("""  <parameter name="DORI" value="0.8"/>  \n""")
+    cluster_file.write("""  <parameter name="DENSITY_RATIO_MIN" value="0.06"/> \n """)
+    cluster_file.write("""  <parameter name="DENSITY_RATIO_MAX" value="16"/>  \n""")
+    cluster_file.write("""  <parameter name="SEDD_STEPSIZE" value="0.3 0.3 0.3"/>  \n """)
+    cluster_file.write("""  <parameter name="DORI_STEPSIZE" value="0.5 0.5 0.5"/>  \n """)
+    cluster_file.write("""  <parameter name="SMOOTHNER" value="ABRUPT"/>  \n """)
+    cluster_file.write("""  <parameter name="DGRID" value="true"/>  \n""")
+    cluster_file.write("""  <parameter name="INTERACTION_WEIGHT" value="false"/> \n """)
+    cluster_file.write(
+      """  <parameter name="WFC_PATH" value="%(yoink_dat_path)s" /> \n """ % locals())
+    cluster_file.write("""  <parameter name="REGION_CUBE" value="SYSTEM"/> \n """)
+    cluster_file.write("""  <parameter name="PARTITIONER" value="INTERACTION"/>  \n""")
+    cluster_file.write("""  </parameterList> \n""")
+    cluster_file.write(""" </cml> \n""")
+    cluster_file.close()
+    lines = open(clustering_file_name, "r").readlines()
+    qmmm_file = open(qmmm_file_name, "w+")
+    lines[-4] = """  <parameter name="REGION_CUBE" value="ADAPTIVE_SEARCH"/> \n """
+    lines[-3] = """   <parameter name="PARTITIONER" value="DORI"/>  \n"""
+    for line in lines:
+      qmmm_file.write(line)
+    qmmm_file.close()  	
+	
