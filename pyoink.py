@@ -1,4 +1,4 @@
-from libtbx.utils import Sorry                                                                                                                                                                                                                                                                                                                                                                                                    
+from libtbx.utils import Sorry
 import numpy as np
 try:
   from jpype import shutdownJVM
@@ -7,7 +7,7 @@ try:
   from jpype import getDefaultJVMPath
   from jpype import java
   from jpype import startJVM
-  import jpype  
+  import jpype
 except ImportError, e:
   print str(e)
   pass
@@ -17,7 +17,7 @@ class PYoink(object):
 
   def __init__(self, yoink_jar_path, yoink_dat_path=None, input_file=None,out_file=None,system=None):
     if not jpype.isJVMStarted():
-      startJVM(getDefaultJVMPath(), "-Djava.class.path="+yoink_jar_path)        
+      startJVM(getDefaultJVMPath(), "-Djava.class.path="+yoink_jar_path)
     Yoink=JClass("org.wallerlab.yoink.Yoink")
     self.yoink_dat_path = yoink_dat_path
     yoink=Yoink()
@@ -26,19 +26,19 @@ class PYoink(object):
     javaApplicationContext=JavaApplicationContext()
     yoink.getBeans(javaApplicationContext)
     FileAdaptiveQMMMProcessor=JClass(
-      "org.wallerlab.yoink.service.processor.FileAdaptiveQMMMProcessor")
+      "org.wallerlab.yoink.service.processor.FileYoinkProcessor")
     self.adaptiveQMMM=javaApplicationContext.getBean(FileAdaptiveQMMMProcessor)
-    JaxbFileReader=JClass("org.wallerlab.yoink.molecular.data.JaxbFileReader")
+    JaxbFileReader=JClass("org.wallerlab.yoink.molecule.data.JaxbFileReader")
     self.jaxbFileReader=javaApplicationContext.getBean(JaxbFileReader)
     self.Cml=JClass("org.xml_cml.schema.Cml")
-    JaxbFileWriter=JClass("org.wallerlab.yoink.molecular.data.JaxbFileWriter")
+    JaxbFileWriter=JClass("org.wallerlab.yoink.molecule.data.JaxbFileWriter")
     self.jaxbFileWriter=javaApplicationContext.getBean(JaxbFileWriter)
     self.result=None
     self.input_file=input_file
     self.out_file=out_file
     self.system=system
     self.set_up()
-        
+
   def set_up(self):
     if(self.input_file is not None):
       self.jaxb_cml=self.jaxbFileReader.read(JString(self.input_file), self.Cml())
@@ -48,10 +48,11 @@ class PYoink(object):
     shutdownJVM()
 
   def get_interactions_list(self):
+    #print self.input_file
     result=self.adaptiveQMMM.process(self.input_file)
-    interactions_temp= result.getInteractionList()
+    interactions_temp=result.getGraph().getEdges()
     interactions_list=[]
-    weights_temp=result.getInteractionWeight()
+    weights_temp=result.getGraph().getWeights()
     weights=[]
     for i in  range (interactions_temp.size()):
       temp=interactions_temp.get(i)
@@ -64,7 +65,7 @@ class PYoink(object):
   def get_qm_indices(self):
     self.result=self.adaptiveQMMM.process(self.input_file)
     #Region=JClass("org.wallerlab.yoink.api.model.regionizer.Region")
-    RegionName=JClass("org.wallerlab.yoink.api.model.regionizer.Region$Name")
+    RegionName=JClass("org.wallerlab.yoink.api.model.region.Region$Name")
     qm_atoms=self.result.getRegions().get(RegionName.valueOf("QM")).getAtoms()
     qm_atom_indices=[]
     qm_size= qm_atoms.size()
@@ -197,5 +198,4 @@ class PYoink(object):
     lines[-3] = """   <parameter name="PARTITIONER" value="DORI"/>  \n"""
     for line in lines:
       qmmm_file.write(line)
-    qmmm_file.close()  	
-	
+    qmmm_file.close()
